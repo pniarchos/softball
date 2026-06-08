@@ -600,7 +600,7 @@ let battingOrder = [];
 let customRoster = []; // loaded from Supabase roster table
 
 // ---- Init ----
-window.onload = function() {
+window.onload = async function() {
   if (SUPABASE_URL === 'YOUR_SUPABASE_URL') {
     document.getElementById('config-screen').style.display = 'flex';
     return;
@@ -624,7 +624,7 @@ function setupPinInputs() {
   digits[0].focus();
 }
 
-function checkPin(entered) {
+async function checkPin(entered) {
   if (entered === PIN) {
     sessionStorage.setItem('cato_pin_ok','1');
     document.getElementById('pin-screen').style.display = 'none';
