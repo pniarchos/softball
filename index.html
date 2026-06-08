@@ -391,7 +391,10 @@ create policy "public access" on games for all using (true);</pre>
     <div class="batting-order-panel" id="batting-order-list">
       <div style="padding:1rem;color:var(--muted);font-size:0.85rem;">No batters added yet — mark players present below.</div>
     </div>
-    <div class="section-header">Full Roster — Tap to Mark Present</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:1.2rem;margin-bottom:0.6rem;">
+      <div class="section-header" style="margin:0;">Full Roster — Tap to Mark Present</div>
+      <button class="edit-link" onclick="openAddPlayerModal()">＋ Add Player</button>
+    </div>
     <input class="roster-search" type="text" placeholder="Search by name or org…" id="roster-search" oninput="filterRoster()">
     <div class="roster-list" id="roster-list"></div>
   </div>
@@ -494,6 +497,32 @@ create policy "public access" on games for all using (true);</pre>
   </div>
 </div>
 
+<!-- ADD PLAYER MODAL -->
+<div class="modal-overlay" id="add-player-modal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="add-player-modal-title">Add Player</div>
+    <div class="modal-field">
+      <label>Full Name *</label>
+      <input id="new-player-name" type="text" placeholder="e.g. Jane Smith" autocomplete="off">
+    </div>
+    <div class="modal-field">
+      <label>Organization</label>
+      <input id="new-player-org" type="text" placeholder="e.g. Cato Institute">
+    </div>
+    <div class="modal-field">
+      <label>Email</label>
+      <input id="new-player-email" type="email" placeholder="e.g. jsmith@cato.org">
+    </div>
+    <input type="hidden" id="edit-player-id">
+    <div class="modal-btns">
+      <button class="btn-danger" id="delete-player-btn" onclick="deleteCustomPlayer()" style="display:none;">Delete</button>
+      <button class="btn-sec" onclick="closeModal('add-player-modal')">Cancel</button>
+      <button class="btn-acc" onclick="saveCustomPlayer()">Save Player</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -568,6 +597,7 @@ let isSyncing = false;
 let editingHistoryId = null;
 let presentPlayers = new Set();
 let battingOrder = [];
+let customRoster = []; // loaded from Supabase roster table
 
 // ---- Init ----
 window.onload = function() {
@@ -578,7 +608,7 @@ window.onload = function() {
   try { sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY); }
   catch(e) { document.getElementById('config-screen').style.display = 'flex'; return; }
 
-  if (sessionStorage.getItem('cato_pin_ok')) { showSetupScreen(); }
+  if (sessionStorage.getItem('cato_pin_ok')) { await loadCustomRoster(); showSetupScreen(); }
   else { document.getElementById('pin-screen').style.display = 'flex'; setupPinInputs(); }
 };
 
@@ -598,6 +628,7 @@ function checkPin(entered) {
   if (entered === PIN) {
     sessionStorage.setItem('cato_pin_ok','1');
     document.getElementById('pin-screen').style.display = 'none';
+    await loadCustomRoster();
     showSetupScreen();
   } else {
     document.getElementById('pin-error').style.display = 'block';
@@ -899,16 +930,89 @@ async function saveEditGame() {
   showToast('Game updated');
 }
 
+// ---- Roster (Supabase) ----
+async function loadCustomRoster() {
+  const { data } = await sb.from('roster').select('*').order('name', {ascending:true});
+  customRoster = data || [];
+  // Seed hardcoded players into Supabase on first load
+  if (customRoster.length === 0) {
+    const inserts = ROSTER.map(p => ({ name: p.name, org: p.org, email: p.email, is_custom: false }));
+    await sb.from('roster').insert(inserts);
+    const { data: seeded } = await sb.from('roster').select('*').order('name', {ascending:true});
+    customRoster = seeded || [];
+  }
+}
+
+function openAddPlayerModal(playerId) {
+  document.getElementById('new-player-name').value = '';
+  document.getElementById('new-player-org').value = '';
+  document.getElementById('new-player-email').value = '';
+  document.getElementById('edit-player-id').value = '';
+  document.getElementById('delete-player-btn').style.display = 'none';
+  document.getElementById('add-player-modal-title').textContent = 'Add Player';
+
+  if (playerId) {
+    const p = customRoster.find(r => r.id === playerId);
+    if (!p) return;
+    document.getElementById('new-player-name').value = p.name;
+    document.getElementById('new-player-org').value = p.org || '';
+    document.getElementById('new-player-email').value = p.email || '';
+    document.getElementById('edit-player-id').value = p.id;
+    document.getElementById('delete-player-btn').style.display = 'block';
+    document.getElementById('add-player-modal-title').textContent = 'Edit Player';
+  }
+  document.getElementById('add-player-modal').classList.add('open');
+  setTimeout(() => document.getElementById('new-player-name').focus(), 300);
+}
+
+async function saveCustomPlayer() {
+  const name = document.getElementById('new-player-name').value.trim();
+  if (!name) { showToast('Name is required'); return; }
+  const org   = document.getElementById('new-player-org').value.trim();
+  const email = document.getElementById('new-player-email').value.trim();
+  const editId = document.getElementById('edit-player-id').value;
+
+  if (editId) {
+    await sb.from('roster').update({ name, org, email }).eq('id', editId);
+    showToast('Player updated');
+  } else {
+    await sb.from('roster').insert({ name, org, email, is_custom: false });
+    showToast(`${name} added to roster`);
+  }
+  await loadCustomRoster();
+  closeModal('add-player-modal');
+  renderRoster();
+}
+
+async function deleteCustomPlayer() {
+  const editId = document.getElementById('edit-player-id').value;
+  if (!editId) return;
+  const name = document.getElementById('new-player-name').value.trim();
+  if (!confirm(`Remove ${name} from the roster permanently?`)) return;
+  await sb.from('roster').delete().eq('id', editId);
+  if (presentPlayers.has(name)) {
+    presentPlayers.delete(name);
+    battingOrder = battingOrder.filter(n => n !== name);
+    if (gameState) { gameState.batting_order = battingOrder; pushState(); }
+  }
+  await loadCustomRoster();
+  closeModal('add-player-modal');
+  showToast(`${name} removed`);
+  renderRoster();
+}
+
 // ---- Lineup ----
 function renderRoster() {
   battingOrder = [...(gameState?.batting_order||[])];
   presentPlayers = new Set(battingOrder);
   const search = (document.getElementById('roster-search')||{}).value||'';
-  const filtered = ROSTER.filter(p => !search ||
+
+  const filtered = customRoster.filter(p => !search ||
     p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.org.toLowerCase().includes(search.toLowerCase()) ||
-    p.email.toLowerCase().includes(search.toLowerCase())
+    (p.org||'').toLowerCase().includes(search.toLowerCase()) ||
+    (p.email||'').toLowerCase().includes(search.toLowerCase())
   );
+
   const list = document.getElementById('roster-list');
   if (!list) return;
   list.innerHTML = filtered.map(p => {
@@ -918,9 +1022,10 @@ function renderRoster() {
       <div class="roster-avatar">${initials}</div>
       <div class="roster-info">
         <div class="roster-name">${p.name}</div>
-        <div class="roster-org">${p.org} · ${p.email}</div>
+        <div class="roster-org">${p.org||''}${p.email ? ' · '+p.email : ''}</div>
       </div>
       ${isPresent?'<div class="roster-check">✓</div>':''}
+      <div class="batting-remove" style="font-size:0.85rem;padding:6px 8px;" onclick="event.stopPropagation();openAddPlayerModal('${p.id}')">✏</div>
     </div>`;
   }).join('');
   renderBattingOrder();
@@ -1105,7 +1210,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     tab.classList.add('active');
     document.getElementById('tab-'+tab.dataset.tab).classList.add('active');
     if (tab.dataset.tab==='history') loadHistory();
-    if (tab.dataset.tab==='lineup') renderRoster();
+    if (tab.dataset.tab==='lineup') { loadCustomRoster().then(() => renderRoster()); }
   });
 });
 
