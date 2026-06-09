@@ -166,6 +166,30 @@
   .batting-remove { color: var(--muted); font-size: 0.9rem; padding: 4px 8px; cursor: pointer; }
   .batting-remove:active { color: var(--red); }
 
+  /* Version badge */
+  .version-badge { font-size: 0.72rem; color: var(--muted); text-align: center; margin-top: 0.25rem; }
+  .version-badge span { color: var(--accent); font-family: 'DM Mono', monospace; }
+  .changelog-wrap { width: 100%; max-width: 380px; }
+  .changelog-toggle { font-size: 0.75rem; color: var(--muted); cursor: pointer; text-align: center; padding: 0.4rem; }
+  .changelog-toggle:active { color: var(--accent); }
+  .changelog-box { display: none; background: var(--surface); border: 1px solid var(--navy-light); border-radius: var(--r); padding: 1rem; font-size: 0.78rem; color: var(--muted); line-height: 1.7; margin-top: 0.4rem; }
+  .changelog-box .v { color: var(--accent); font-family: 'DM Mono', monospace; font-weight: 500; }
+
+  /* Share */
+  .share-bar { display: flex; gap: 8px; justify-content: center; margin: 0.5rem 0 1rem; }
+  .share-btn { display: flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--navy-light); border-radius: var(--r); padding: 0.6rem 1rem; font-size: 0.82rem; color: var(--text); font-family: inherit; cursor: pointer; }
+  .share-btn:active { background: var(--surface3); }
+  .qr-wrap { background: white; padding: 16px; border-radius: var(--r); margin: 1rem auto; display: inline-block; }
+
+  /* Current batter */
+  .batting-slot.current-batter { background: var(--accent-dim); border-left: 3px solid var(--accent); }
+  .batting-slot.current-batter .batting-num { color: var(--accent); font-weight: 600; }
+  .batting-slot.current-batter .batting-name { color: var(--accent); font-weight: 600; }
+  .batter-nav { display: flex; gap: 8px; margin-bottom: 0.75rem; }
+  .batter-nav-btn { flex: 1; padding: 0.65rem; border-radius: var(--r); border: 1px solid var(--navy-light); background: var(--surface); color: var(--text); font-size: 0.85rem; font-family: inherit; cursor: pointer; text-align: center; }
+  .batter-nav-btn:active { background: var(--surface3); }
+  .batter-nav-btn.primary { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
   /* ===== HISTORY ===== */
   .game-card { background: var(--surface); border: 1px solid var(--navy-light); border-radius: var(--r); padding: 1rem; margin-bottom: 0.75rem; }
   .game-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem; }
@@ -282,6 +306,11 @@ create policy "public access" on games for all using (true);</pre>
 <!-- SETUP SCREEN -->
 <div id="setup-screen">
   <div class="cato-wordmark" style="font-size:3rem;margin-top:1.5rem;"><span>CATO</span> SOFTBALL</div>
+  <div class="version-badge">Version <span>1.5</span> · June 2026</div>
+  <div class="share-bar">
+    <button class="share-btn" onclick="copyLink()">🔗 Copy Link</button>
+    <button class="share-btn" onclick="openQRModal()">📱 QR Code</button>
+  </div>
   <div class="setup-box">
     <h2>New Game</h2>
     <div class="field-row">
@@ -295,6 +324,17 @@ create policy "public access" on games for all using (true);</pre>
     <button class="btn-primary" onclick="startNewGame()">Start Game →</button>
   </div>
   <div id="existing-games-setup" style="width:100%;max-width:380px;display:flex;flex-direction:column;gap:8px;"></div>
+  <div class="changelog-wrap">
+    <div class="changelog-toggle" onclick="toggleChangelog()">▸ Version history</div>
+    <div class="changelog-box" id="changelog-box">
+      <div><span class="v">v1.5</span> · June 2026 — Current batter tracker, CSV export, share/QR, player stats (games played), version indicator</div>
+      <div><span class="v">v1.4</span> · June 2026 — Unified Supabase roster (add/edit/remove all players)</div>
+      <div><span class="v">v1.3</span> · June 2026 — Roster management, add/remove custom players</div>
+      <div><span class="v">v1.2</span> · June 2026 — No-balls rule, 6-strike count, score banner, base coach tips, +/− swap</div>
+      <div><span class="v">v1.1</span> · June 2026 — Cato brand colors, edit game/history, history CSV, batting order</div>
+      <div><span class="v">v1.0</span> · June 2026 — Initial launch: real-time sync, roster, season history</div>
+    </div>
+  </div>
 </div>
 
 <!-- MAIN APP -->
@@ -388,6 +428,10 @@ create policy "public access" on games for all using (true);</pre>
   <!-- LINEUP TAB -->
   <div class="tab-panel" id="tab-lineup">
     <div class="section-header">Batting Order (Today)</div>
+    <div class="batter-nav">
+      <button class="batter-nav-btn" onclick="moveBatterFocus(-1)">◀ Prev Batter</button>
+      <button class="batter-nav-btn primary" onclick="moveBatterFocus(1)">Next Batter ▶</button>
+    </div>
     <div class="batting-order-panel" id="batting-order-list">
       <div style="padding:1rem;color:var(--muted);font-size:0.85rem;">No batters added yet — mark players present below.</div>
     </div>
@@ -403,6 +447,11 @@ create policy "public access" on games for all using (true);</pre>
   <div class="tab-panel" id="tab-history">
     <div class="section-header">Season Stats</div>
     <div class="stats-grid" id="season-stats"></div>
+    <div style="display:flex;gap:8px;margin-bottom:1rem;">
+      <button class="card-btn primary" style="flex:1;padding:0.65rem;" onclick="exportSeasonCSV()">⬇ Export Season CSV</button>
+    </div>
+    <div class="section-header">Player Stats — Games Played</div>
+    <div id="player-stats-list" style="margin-bottom:1rem;"></div>
     <div class="section-header">Game History</div>
     <div id="history-list"></div>
   </div>
@@ -493,6 +542,21 @@ create policy "public access" on games for all using (true);</pre>
       <button class="btn-danger" onclick="deleteHistoryGame()">Delete</button>
       <button class="btn-sec" onclick="closeModal('edit-history-modal')">Cancel</button>
       <button class="btn-acc" onclick="saveHistoryGame()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- QR MODAL -->
+<div class="modal-overlay" id="qr-modal">
+  <div class="modal-sheet" style="align-items:center;text-align:center;">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Share App</div>
+    <div style="font-size:0.82rem;color:var(--muted);margin-bottom:0.5rem;word-break:break-all;" id="qr-url-display"></div>
+    <div class="qr-wrap" id="qr-canvas-wrap"></div>
+    <div style="font-size:0.78rem;color:var(--muted);margin-bottom:1rem;">Scan to open · PIN: 1776</div>
+    <div class="modal-btns">
+      <button class="btn-sec" onclick="closeModal('qr-modal')">Close</button>
+      <button class="btn-acc" onclick="copyLink()">Copy Link</button>
     </div>
   </div>
 </div>
@@ -598,6 +662,7 @@ let editingHistoryId = null;
 let presentPlayers = new Set();
 let battingOrder = [];
 let customRoster = []; // loaded from Supabase roster table
+let currentBatterIdx = 0; // index into battingOrder
 
 // ---- Init ----
 window.onload = async function() {
@@ -884,6 +949,7 @@ function clearCount() {
 function nextBatter() {
   if (!gameState) return;
   gameState.strikes=0;
+  moveBatterFocus(1);
   renderCount(); pushState(); showToast('Next batter');
 }
 
@@ -1031,6 +1097,12 @@ function renderRoster() {
   renderBattingOrder();
 }
 
+function moveBatterFocus(dir) {
+  if (!battingOrder || battingOrder.length === 0) return;
+  currentBatterIdx = (currentBatterIdx + dir + battingOrder.length) % battingOrder.length;
+  renderBattingOrder();
+}
+
 function filterRoster() { renderRoster(); }
 
 function togglePresent(name) {
@@ -1057,15 +1129,20 @@ function renderBattingOrder() {
     el.innerHTML = '<div style="padding:1rem;color:var(--muted);font-size:0.85rem;">No batters added yet — mark players present below.</div>';
     return;
   }
+  // Clamp currentBatterIdx
+  if (currentBatterIdx >= battingOrder.length) currentBatterIdx = 0;
   el.innerHTML = battingOrder.map((name,i) =>
-    `<div class="batting-slot">
+    `<div class="batting-slot${i===currentBatterIdx?' current-batter':''}">
       <span class="batting-num">${i+1}.</span>
-      <span class="batting-name">${name}</span>
+      <span class="batting-name">${name}${i===currentBatterIdx?' 🏏':''}</span>
       <span class="batting-remove" onclick="moveBatter(${i},-1)">↑</span>
       <span class="batting-remove" onclick="moveBatter(${i},1)">↓</span>
       <span class="batting-remove" onclick="removeBatter(${i})">✕</span>
     </div>`
   ).join('');
+  // Scroll current batter into view
+  const cur = el.querySelector('.current-batter');
+  if (cur) cur.scrollIntoView({ block:'nearest', behavior:'smooth' });
 }
 
 function moveBatter(idx, dir) {
@@ -1086,10 +1163,16 @@ async function loadHistory() {
   const { data } = await sb.from('games').select('*').eq('status','completed').order('created_at',{ascending:false});
   const el = document.getElementById('history-list');
   const statsEl = document.getElementById('season-stats');
+  const playerStatsEl = document.getElementById('player-stats-list');
+
   if (!data||data.length===0) {
     el.innerHTML = '<div class="empty-state"><h3>No completed games yet</h3><p>End a game to see it here.</p></div>';
-    statsEl.innerHTML = ''; return;
+    statsEl.innerHTML = '';
+    if (playerStatsEl) playerStatsEl.innerHTML = '';
+    return;
   }
+
+  // Season stats
   let wins=0,losses=0,ties=0,totalRuns=0;
   data.forEach(g => {
     if (g.away_r>g.home_r) wins++;
@@ -1104,6 +1187,31 @@ async function loadHistory() {
     {label:'Win %', val:Math.round(wins/data.length*100)+'%', sub:''},
   ].map(s=>`<div class="stat-card"><div class="stat-label">${s.label}</div><div class="stat-val">${s.val}</div><div class="stat-sub">${s.sub}</div></div>`).join('');
 
+  // Player stats — games played (count appearances in batting_order)
+  if (playerStatsEl) {
+    const gamesPlayed = {};
+    data.forEach(g => {
+      (g.batting_order||[]).forEach(name => {
+        gamesPlayed[name] = (gamesPlayed[name]||0) + 1;
+      });
+    });
+    const sorted = Object.entries(gamesPlayed).sort((a,b)=>b[1]-a[1]);
+    if (sorted.length === 0) {
+      playerStatsEl.innerHTML = '<div style="font-size:0.82rem;color:var(--muted);padding:0.5rem 0;">No batting order data yet.</div>';
+    } else {
+      playerStatsEl.innerHTML = `<div style="background:var(--surface);border:1px solid var(--navy-light);border-radius:var(--r);overflow:hidden;">
+        <div style="display:grid;grid-template-columns:1fr auto;padding:0.5rem 0.9rem;background:var(--surface2);font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">
+          <span>Player</span><span>GP</span>
+        </div>
+        ${sorted.map(([name,gp],i)=>`
+        <div style="display:grid;grid-template-columns:1fr auto;padding:0.55rem 0.9rem;border-top:1px solid var(--navy-light);font-size:0.85rem;${i===0?'color:var(--accent);':''}">`+
+          `<span>${name}</span><span style="font-family:'DM Mono',monospace;">${gp}</span>
+        </div>`).join('')}
+      </div>`;
+    }
+  }
+
+  // Game cards with per-game CSV
   el.innerHTML = data.map(g => {
     const isWin=g.away_r>g.home_r, isLoss=g.away_r<g.home_r;
     const rc=isWin?'win':isLoss?'loss':'tie', rl=isWin?'W':isLoss?'L':'T';
@@ -1129,9 +1237,50 @@ async function loadHistory() {
       <div class="game-card-actions">
         <button class="card-btn primary" onclick="openEditHistoryModal('${g.id}')">✏ Edit</button>
         <button class="card-btn" onclick="reopenGame('${g.id}')">↩ Reopen</button>
+        <button class="card-btn" onclick="exportGameCSV('${g.id}')">⬇ CSV</button>
       </div>
     </div>`;
   }).join('');
+}
+
+function gameToCSVRow(g) {
+  const innings = (arr) => (arr||Array(7).fill(0)).join(',');
+  const roster = (g.batting_order||[]).join(';');
+  return [
+    g.date||'',
+    g.away_name||'CATO',
+    g.opponent||'',
+    g.away_r,g.home_r,
+    innings(g.away_runs),
+    innings(g.home_runs),
+    (g.away_r>g.home_r?'W':g.home_r>g.away_r?'L':'T'),
+    roster
+  ].join(',');
+}
+
+async function exportGameCSV(id) {
+  const { data } = await sb.from('games').select('*').eq('id',id).single();
+  if (!data) return;
+  const header = 'Date,Cato,Opponent,Cato R,Opp R,Cato Inn 1,Inn 2,Inn 3,Inn 4,Inn 5,Inn 6,Inn 7,Opp Inn 1,Inn 2,Inn 3,Inn 4,Inn 5,Inn 6,Inn 7,Result,Batting Order';
+  const csv = header + '\n' + gameToCSVRow(data);
+  downloadCSV(csv, `cato-softball-${data.date||'game'}-vs-${(data.opponent||'opp').replace(/\s+/g,'-')}.csv`);
+}
+
+async function exportSeasonCSV() {
+  const { data } = await sb.from('games').select('*').eq('status','completed').order('created_at',{ascending:true});
+  if (!data||data.length===0) { showToast('No completed games yet'); return; }
+  const header = 'Date,Cato,Opponent,Cato R,Opp R,Cato Inn 1,Inn 2,Inn 3,Inn 4,Inn 5,Inn 6,Inn 7,Opp Inn 1,Inn 2,Inn 3,Inn 4,Inn 5,Inn 6,Inn 7,Result,Batting Order';
+  const rows = data.map(gameToCSVRow);
+  downloadCSV(header + '\n' + rows.join('\n'), `cato-softball-season-${new Date().getFullYear()}.csv`);
+  showToast('Season CSV downloaded');
+}
+
+function downloadCSV(csv, filename) {
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
 }
 
 async function openEditHistoryModal(id) {
@@ -1213,6 +1362,32 @@ document.querySelectorAll('.tab').forEach(tab => {
     if (tab.dataset.tab==='lineup') { loadCustomRoster().then(() => renderRoster()); }
   });
 });
+
+// ---- Share & QR ----
+function copyLink() {
+  const url = window.location.href.split('?')[0];
+  navigator.clipboard.writeText(url).then(() => showToast('Link copied!')).catch(() => {
+    prompt('Copy this link:', url);
+  });
+}
+
+function openQRModal() {
+  const url = window.location.href.split('?')[0];
+  document.getElementById('qr-url-display').textContent = url;
+  const wrap = document.getElementById('qr-canvas-wrap');
+  // Build QR using Google Charts API (no library needed)
+  wrap.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}" width="200" height="200" style="display:block;">`;
+  document.getElementById('qr-modal').classList.add('open');
+}
+
+// ---- Changelog ----
+function toggleChangelog() {
+  const box = document.getElementById('changelog-box');
+  const toggle = document.querySelector('.changelog-toggle');
+  const open = box.style.display === 'block';
+  box.style.display = open ? 'none' : 'block';
+  toggle.textContent = open ? '▸ Version history' : '▾ Version history';
+}
 
 // ---- Toast ----
 let toastTimer;
